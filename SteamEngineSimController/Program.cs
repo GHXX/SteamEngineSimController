@@ -25,6 +25,7 @@ internal class Program {
     private static PID reverserPid = null!;
 
     private static void Main(string[] args) {
+        Thread.CurrentThread.CurrentCulture = Thread.CurrentThread.CurrentUICulture = CultureInfo.InvariantCulture;
         Console.Title = "Steam engine sim controller";
         while (true) {
             try {
