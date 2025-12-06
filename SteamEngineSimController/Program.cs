@@ -6,6 +6,7 @@ namespace SteamEngineSimController;
 
 internal class Program {
     private static MemoryLocation<float> memlocReverser = null!;
+    private static MemoryLocation<float> memlocBrakeStop = null!;
     //private static MemoryLocation<float> memlocGeneratorSpeed = null!;
 
     private static nint gameHandle = -1;
@@ -45,15 +46,21 @@ internal class Program {
 
     private static int timeSecondsNow = 0;
     private const double desiredGeneratorSpeed = 1150;
+    private static float lastGenSpeed = 0;
     private static void Update(Process proc) {
         timeSecondsNow++;
-        var newReverserSetting = Math.Clamp(reverserPid.Step(timeSecondsNow, desiredGeneratorSpeed, GeneratorSpeed), 0, 1);
-        memlocReverser.SetValue((float)newReverserSetting);
+        var genSpeedNow = GeneratorSpeed;
+        var newReverserSetting = Math.Clamp(reverserPid.Step(timeSecondsNow, desiredGeneratorSpeed, genSpeedNow), 0, 1);
+        memlocReverser.SetValue((float)Math.Clamp(newReverserSetting, 0.5, 1));
+        memlocBrakeStop.SetValue((float)(Math.Clamp((-newReverserSetting * 2 + 1), 0, 1)));
         Console.Clear();
         Console.WriteLine($"""
             New values:
             New reverser speed: {newReverserSetting:N3}; {reverserPid.StateString}
+
+            Generator speed delta: {genSpeedNow - lastGenSpeed}
             """);
+        lastGenSpeed = genSpeedNow;
     }
 
     private static void Init(Process proc) {
@@ -112,7 +119,8 @@ internal class Program {
         //var windowEventHandlerHolder2 = MemoryUtil.FindMemoryWithWildcards(handle, (nint)0x00007FF616D71000, (uint)0x0000000000050000+0x23000, "00,00,7F,F6,16,D7,30,40".Split(",").Select(x => (byte?)Convert.ToByte(x, 16)).ToArray());
         //long reverserOffset = 0x227AC773750; //0x1DAEBEE0450 - 0x00007ff616d66ba0 + ep;
         //long generatorSpeedOffset = reverserOffset + 0x12E51800;
-        memlocReverser = new MemoryLocation<float>(handle, (nint)reverserAddress);
+        memlocReverser = new MemoryLocation<float>(handle, reverserAddress);
+        memlocBrakeStop = new MemoryLocation<float>(handle, brakeStopAddress);
         //memlocGeneratorSpeed = new MemoryLocation<float>(handle, (nint)generatorSpeedOffset);
 
         reverserPid = new PID(0.01, 1e-5, 0, memlocReverser.GetValue(), false, (0, 1));
