@@ -112,7 +112,7 @@ public class KernelMethods {
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    public readonly record struct PMEMORY_BASIC_INFORMATION (
+    public readonly record struct PMEMORY_BASIC_INFORMATION(
         IntPtr BaseAddress,
         IntPtr AllocationBase,
         FlPageProtect AllocationProtect,

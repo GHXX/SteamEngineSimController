@@ -1,8 +1,6 @@
 ﻿using SteamEngineSimController.MemoryHelpers;
 using System.Diagnostics;
 using System.Globalization;
-using System.Reflection.Metadata;
-using System.Runtime.InteropServices;
 
 namespace SteamEngineSimController;
 
@@ -69,7 +67,7 @@ internal class Program {
             var matches = MemoryUtil.FindMemoryWithWildcardsAcrossALLPages(handle,
             pattern.Split(' ')
             .Select(x => (byte?)byte.Parse(x, NumberStyles.HexNumber)).ToArray(), pages);
-            return matches.Select(x=>x.Key).ToArray();
+            return matches.Select(x => x.Key).ToArray();
         }
 
         nint FindWidgetValueAddress(string pattern, int offset = -8) {
@@ -81,10 +79,10 @@ internal class Program {
         var reverserAddress = FindWidgetValueAddress("25 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 0F 00 00 00 00 00 00 00 52 45 56 45 52 53 45 52 00 00 00 00");
         var brakeStopAddress = FindWidgetValueAddress("25 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 0F 00 00 00 00 00 00 00 42 52 41 4B 45 20 53 54 4F 50 00 00 00 00 00 00");
         var whistleAddress = FindWidgetValueAddress("25 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 0F 00 00 00 00 00 00 00 57 48 49 53 54 4C 45 00 00 00 00 00 00 00 00 00");
-        var genRpmTextAddressCandidates = FindMultipleWidgetValueAddresses("47 45 4E 45 52 41 54 4F 52 20 53 50 45 45 44 00").Select(x=>x+ 38).ToArray();
+        var genRpmTextAddressCandidates = FindMultipleWidgetValueAddresses("47 45 4E 45 52 41 54 4F 52 20 53 50 45 45 44 00").Select(x => x + 38).ToArray();
         var generatorRpmTextAddresses = genRpmTextAddressCandidates.Where(c => {
             var stringRep = string.Join("", KernelMethods.ReadMemory(handle, c - 7, 64).Select(x => (char)x));
-            return stringRep.Replace(" RPM","").Length == stringRep.Length - 2*" RPM".Length;
+            return stringRep.Replace(" RPM", "").Length == stringRep.Length - 2 * " RPM".Length;
         }).ToArray();
         var generatorRpmTextAddress = generatorRpmTextAddresses.Single() - 6;
         generatorSpeedPtr = generatorRpmTextAddress;
