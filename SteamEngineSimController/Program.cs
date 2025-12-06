@@ -1,12 +1,16 @@
 ﻿using SteamEngineSimController.MemoryHelpers;
+using SteamEngineSimController.Types;
 using System.Diagnostics;
 using System.Globalization;
+using System.Runtime.InteropServices;
 
 namespace SteamEngineSimController;
 
 internal class Program {
     private static MemoryLocation<float> memlocReverser = null!;
     private static MemoryLocation<float> memlocBrakeStop = null!;
+    private static MemoryLocation<float> memlocEngineSpeedMarker = null!;
+    private static MemoryLocation<float> memlocHeat = null!;
     //private static MemoryLocation<float> memlocGeneratorSpeed = null!;
 
     private static nint gameHandle = -1;
@@ -45,20 +49,24 @@ internal class Program {
     }
 
     private static int timeSecondsNow = 0;
-    private const double desiredGeneratorSpeed = 1150;
+    //private const double desiredGeneratorSpeed = 1150;
     private static float lastGenSpeed = 0;
     private static void Update(Process proc) {
         timeSecondsNow++;
         var genSpeedNow = GeneratorSpeed;
-        var newReverserSetting = Math.Clamp(reverserPid.Step(timeSecondsNow, desiredGeneratorSpeed, genSpeedNow), 0, 1);
+        var engineSpeedMarkerPos = memlocEngineSpeedMarker.GetValue();
+        var desiredGenSpeed = engineSpeedMarkerPos * 1200;
+        var newReverserSetting = Math.Clamp(reverserPid.Step(timeSecondsNow, desiredGenSpeed, genSpeedNow), 0, 1);
         memlocReverser.SetValue((float)Math.Clamp(newReverserSetting, 0.5, 1));
         memlocBrakeStop.SetValue((float)(Math.Clamp((-newReverserSetting * 2 + 1), 0, 1)));
         Console.Clear();
         Console.WriteLine($"""
+            Marker pos: {engineSpeedMarkerPos * 700:N2} --> Desired generator speed: {desiredGenSpeed}
+            Generator speed delta: {genSpeedNow - lastGenSpeed}
+
             New values:
             New reverser speed: {newReverserSetting:N3}; {reverserPid.StateString}
 
-            Generator speed delta: {genSpeedNow - lastGenSpeed}
             """);
         lastGenSpeed = genSpeedNow;
     }
@@ -87,6 +95,7 @@ internal class Program {
         var reverserAddress = FindWidgetValueAddress("25 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 0F 00 00 00 00 00 00 00 52 45 56 45 52 53 45 52 00 00 00 00");
         var brakeStopAddress = FindWidgetValueAddress("25 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 0F 00 00 00 00 00 00 00 42 52 41 4B 45 20 53 54 4F 50 00 00 00 00 00 00");
         var whistleAddress = FindWidgetValueAddress("25 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 0F 00 00 00 00 00 00 00 57 48 49 53 54 4C 45 00 00 00 00 00 00 00 00 00");
+        var heatAddress = FindWidgetValueAddress("25 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 0F 00 00 00 00 00 00 00 48 45 41 54 00 00 00");
         var genRpmTextAddressCandidates = FindMultipleWidgetValueAddresses("47 45 4E 45 52 41 54 4F 52 20 53 50 45 45 44 00").Select(x => x + 38).ToArray();
         var generatorRpmTextAddresses = genRpmTextAddressCandidates.Where(c => {
             var stringRep = string.Join("", KernelMethods.ReadMemory(handle, c - 7, 64).Select(x => (char)x));
@@ -97,12 +106,25 @@ internal class Program {
         //var rpmText = string.Join("", KernelMethods.ReadMemory(handle, generatorRpmTextAddress, 16).TakeWhile(x => x != '\0').Select(x=>(char)x));
         //var rpmValue = rpmText.EndsWith(" RPM") && float.TryParse(string.Join("", rpmText.SkipLast(" RPM".Length)), CultureInfo.InvariantCulture, out var res) ? res : -1;
 
-        //    var steamEngineVisualizationPrivFieldPtr = MemoryUtil.FindMemoryWithWildcardsAcrossALLPages(handle,
-        //new[] { brakeStopAddress, whistleAddress, reverserAddress }.Select(x => BitConverter.GetBytes(x - i).ToArray())
-        //                                                           .Aggregate((a, b) => a.Concat(b).ToArray())
-        //                                                           .Select(x => (byte?)x)
-        //                                                           .ToArray(), pages);
+        var steamEngineVisualizationKnownFieldOffset = MemoryUtil.FindMemoryWithWildcardsAcrossALLPages(handle,
+            new[] { brakeStopAddress, whistleAddress, reverserAddress }
+            .Select(x => BitConverter.GetBytes(x - 544).ToArray())
+            .Aggregate((a, b) => a.Concat(b).ToArray())
+            .Select(x => (byte?)x)
+            .ToArray(), pages).Single().Key;
 
+        var structSize = Marshal.SizeOf<SteamEngineVisualizationPartial>();
+        var brakeStopStructOffset = Marshal.OffsetOf<SteamEngineVisualizationPartial>(nameof(SteamEngineVisualizationPartial.brakeStopSlider));
+        var structBytes = KernelMethods.ReadMemory(gameHandle, steamEngineVisualizationKnownFieldOffset - brakeStopStructOffset, (uint)structSize);
+        SteamEngineVisualizationPartial steamEngineVizStruct;
+        GCHandle gch = GCHandle.Alloc(structBytes, GCHandleType.Pinned);
+        try {
+            steamEngineVizStruct = Marshal.PtrToStructure<SteamEngineVisualizationPartial>(gch.AddrOfPinnedObject());
+        } finally {
+            gch.Free();
+        }
+
+        #region MainStructRediscoveryCode
         //for (int i = 544; i <= 4096; i += 4) { // Main struct offset discovery
 
         //    var steamEngineVisualizationPrivFieldPtr = MemoryUtil.FindMemoryWithWildcardsAcrossALLPages(handle,
@@ -119,8 +141,34 @@ internal class Program {
         //var windowEventHandlerHolder2 = MemoryUtil.FindMemoryWithWildcards(handle, (nint)0x00007FF616D71000, (uint)0x0000000000050000+0x23000, "00,00,7F,F6,16,D7,30,40".Split(",").Select(x => (byte?)Convert.ToByte(x, 16)).ToArray());
         //long reverserOffset = 0x227AC773750; //0x1DAEBEE0450 - 0x00007ff616d66ba0 + ep;
         //long generatorSpeedOffset = reverserOffset + 0x12E51800;
+        #endregion
+
+
+        var mainVizMempage = pages.Single(x => x.BaseAddress <= steamEngineVisualizationKnownFieldOffset && steamEngineVisualizationKnownFieldOffset <= x.BaseAddress + (int)x.Length);
+        //var objectToLookFor = 0x166F45642E0; // search this offset in the main viz struct;
+        //for (int i = 0; i <= 4096; i += 4) { // Main struct offset discovery
+
+        //    var fieldPtrCandidate = MemoryUtil.FindMemoryWithWildcardsAcrossALLPages(handle,
+        //        new[] { objectToLookFor }.Select(x => BitConverter.GetBytes(x - i).ToArray())
+        //                                 .Aggregate((a, b) => a.Concat(b).ToArray())
+        //                                 .Select(x => (byte?)x)
+        //                                 .ToArray(), [mainVizMempage]);
+
+        //    if (fieldPtrCandidate.Count != 0) {
+        //        Console.WriteLine($"found at field at -{i}: at {(string.Join(", ", fieldPtrCandidate.Keys.Select(x=>$"0x{x:X}")))}");
+        //    }
+        //}
+
+        var sliderValueOffset = 544;
+        Assert(steamEngineVizStruct.reverserSlider == reverserAddress - sliderValueOffset, "reverser address");
+        Assert(steamEngineVizStruct.brakeStopSlider == brakeStopAddress - sliderValueOffset, "brake stop address");
+        memlocEngineSpeedMarker = new MemoryLocation<float>(gameHandle, MemoryUtil.ReadValue<IntPtr>(gameHandle, steamEngineVizStruct.engineSpeedMarker + 0x270) + 0x220);
+
+        IntPtr DerefPtr(IntPtr p) => MemoryUtil.ReadValue<IntPtr>(gameHandle, p);
+
         memlocReverser = new MemoryLocation<float>(handle, reverserAddress);
         memlocBrakeStop = new MemoryLocation<float>(handle, brakeStopAddress);
+        memlocHeat = new MemoryLocation<float>(handle, heatAddress);
         //memlocGeneratorSpeed = new MemoryLocation<float>(handle, (nint)generatorSpeedOffset);
 
         reverserPid = new PID(0.01, 1e-5, 0, memlocReverser.GetValue(), false, (0, 1));
