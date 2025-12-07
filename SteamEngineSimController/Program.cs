@@ -13,6 +13,7 @@ internal class Program {
     private static MemoryLocation<float> memlocBoilerPressureMarker = null!;
     private static MemoryLocation<float> memlocActualHeat = null!;
     private static MemoryLocation<float> memlocDesiredHeat = null!;
+    private static SteamEngineVisualizationPartial steamEngineVisualizationStruct = default;
     //private static ReadOnlyMemoryLocation<float> memlocBoilerPressure = null!;
 
     public float BoilerPressureMarker350 { get => memlocBoilerPressureMarker.GetValue() * 350; set => memlocBoilerPressureMarker.SetValue(value / 350); }
@@ -50,15 +51,23 @@ internal class Program {
             return rpmValue;
         }
     }
-    private static IntPtr boilerPressurePtr = -1;
+
     private static float BoilerPressure {
         get {
-            var rpmText = string.Join("", KernelMethods.ReadMemory(gameHandle, boilerPressurePtr, 16).TakeWhile(x => x != '\0').Select(x => (char)x));
-            var rpmValue = rpmText.EndsWith(" PSI") && float.TryParse(string.Join("", rpmText.SkipLast(" PSI".Length)), CultureInfo.InvariantCulture, out var res) ? res : -1;
-            if (rpmValue < 0) {
-                throw new Exception(); // maybe clean this up loll
+            var psiText = string.Join("",
+                    KernelMethods.ReadMemory(gameHandle, MemoryUtil.ReadValue<IntPtr>(gameHandle, steamEngineVisualizationStruct.pressureReadout + 0x260), 16)
+                    .TakeWhile(x => x != '\0').Select(x => (char)x)
+                );
+
+            float rv = 0;
+            if (psiText.EndsWith(" PSI") && float.TryParse(string.Join("", psiText.SkipLast(" PSI".Length)), CultureInfo.InvariantCulture, out var res)) {
+                rv = res;
+            } else if (psiText.Contains("IN HG") && float.TryParse(psiText.Split("IN HG")[0], out var res2)) {
+                rv = -res2;
+            } else {
+                throw new Exception("Failed to parse boiler pressure string");
             }
-            return rpmValue;
+            return rv;
         }
     }
 
@@ -98,7 +107,8 @@ internal class Program {
         memlocBrakeStop.SetValue((float)(Math.Clamp((-newReverserSetting * 2 + 1), 0, 1)));
 
         var desiredPressure = memlocBoilerPressureMarker.GetValue();
-        var newHeatSetting = Math.Clamp(heatPid.Step(timeSecondsNow, desiredPressure*350, BoilerPressure), 0, 1);
+        var currBoilerPressure = BoilerPressure;
+        var newHeatSetting = Math.Clamp(heatPid.Step(timeSecondsNow, desiredPressure * 350, currBoilerPressure), 0, 1);
         DesiredHeat01 = (float)newHeatSetting;
 
 
@@ -106,6 +116,7 @@ internal class Program {
         Console.WriteLine($"""
             Marker pos: {engineSpeedMarkerPos * 700:N2} --> Desired generator speed: {desiredGenSpeed}
             Generator speed delta: {genSpeedNow - lastGenSpeed}
+            Boiler pressure: {currBoilerPressure} PSI
 
             New values:
             New reverser speed: {newReverserSetting:N3}; {reverserPid.StateString}
@@ -120,6 +131,8 @@ internal class Program {
         var ep = proc.MainModule!.BaseAddress; // AKA ENTRY aka 14::
         var procMemLen = proc.MainModule!.ModuleMemorySize;
 
+
+        Console.WriteLine("Getting ram pages...");
         var pages = MemoryUtil.GetMemoryPages(handle).Where(x => x.Protect == KernelMethods.FlPageProtect.PAGE_READWRITE).ToArray();
 
         nint[] FindMultipleWidgetValueAddresses(string pattern) {
@@ -135,6 +148,7 @@ internal class Program {
             .Select(x => (byte?)byte.Parse(x, NumberStyles.HexNumber)).ToArray(), pages);
             return matches.Single().Key + offset; // offset because the value we are looking for is before the inlined 25...-string
         }
+        Console.WriteLine("Searching widgets...");
         var reverserAddress = FindWidgetValueAddress("25 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 0F 00 00 00 00 00 00 00 52 45 56 45 52 53 45 52 00 00 00 00");
         var brakeStopAddress = FindWidgetValueAddress("25 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 0F 00 00 00 00 00 00 00 42 52 41 4B 45 20 53 54 4F 50 00 00 00 00 00 00");
         var whistleAddress = FindWidgetValueAddress("25 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 0F 00 00 00 00 00 00 00 57 48 49 53 54 4C 45 00 00 00 00 00 00 00 00 00");
@@ -149,6 +163,7 @@ internal class Program {
         //var rpmText = string.Join("", KernelMethods.ReadMemory(handle, generatorRpmTextAddress, 16).TakeWhile(x => x != '\0').Select(x=>(char)x));
         //var rpmValue = rpmText.EndsWith(" RPM") && float.TryParse(string.Join("", rpmText.SkipLast(" RPM".Length)), CultureInfo.InvariantCulture, out var res) ? res : -1;
 
+        Console.WriteLine("Searching for main game object...");
         var steamEngineVisualizationKnownFieldOffset = MemoryUtil.FindMemoryWithWildcardsAcrossALLPages(handle,
             new[] { brakeStopAddress, whistleAddress, reverserAddress }
             .Select(x => BitConverter.GetBytes(x - 544).ToArray())
@@ -156,9 +171,12 @@ internal class Program {
             .Select(x => (byte?)x)
             .ToArray(), pages).Single().Key;
 
+
         var structSize = Marshal.SizeOf<SteamEngineVisualizationPartial>();
         var brakeStopStructOffset = Marshal.OffsetOf<SteamEngineVisualizationPartial>(nameof(SteamEngineVisualizationPartial.brakeStopSlider));
-        var structBytes = KernelMethods.ReadMemory(gameHandle, steamEngineVisualizationKnownFieldOffset - brakeStopStructOffset, (uint)structSize);
+        var steamEngineVizOffset = steamEngineVisualizationKnownFieldOffset - brakeStopStructOffset;
+        Console.WriteLine($"Main game object found at roughly {steamEngineVizOffset}");
+        var structBytes = KernelMethods.ReadMemory(gameHandle, steamEngineVizOffset, (uint)structSize);
         SteamEngineVisualizationPartial steamEngineVizStruct;
         GCHandle gch = GCHandle.Alloc(structBytes, GCHandleType.Pinned);
         try {
@@ -202,6 +220,7 @@ internal class Program {
         //    }
         //}
 
+        steamEngineVisualizationStruct = steamEngineVizStruct;
         var sliderValueOffset = 544;
         Assert(steamEngineVizStruct.reverserSlider == reverserAddress - sliderValueOffset, "reverser address");
         Assert(steamEngineVizStruct.brakeStopSlider == brakeStopAddress - sliderValueOffset, "brake stop address");
@@ -212,7 +231,8 @@ internal class Program {
         memlocActualHeat = new MemoryLocation<float>(handle, steamEngineVizStruct.heatSlider + sliderValueOffset + 0xe8);
         memlocDesiredHeat = new MemoryLocation<float>(handle, steamEngineVizStruct.heatSlider + sliderValueOffset + 0xa4); // seems to range from 0 to 1.875 and be scaled exponentially?
 
-        boilerPressurePtr = steamEngineVizStruct.pressureReadout + sliderValueOffset + 0x20;
+        //var boilerPressurePtr_lVar1 = MemoryUtil.ReadValue<IntPtr>(handle, steamEngineVizStruct.pressureReadout + 0x440);
+        //var boilerPressurePtr_lVar1_2 = MemoryUtil.ReadValue<IntPtr>(handle, steamEngineVizStruct.pressureReadout + 0x438);
         memlocBoilerPressureMarker = new ReadOnlyMemoryLocation<float>(handle, MemoryUtil.ReadValue<IntPtr>(gameHandle, steamEngineVizStruct.pressureMarker + 0x270) + 0x220);
 
         //memlocGeneratorSpeed = new MemoryLocation<float>(handle, (nint)generatorSpeedOffset);
