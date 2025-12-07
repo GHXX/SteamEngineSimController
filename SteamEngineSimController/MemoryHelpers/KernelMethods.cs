@@ -1,6 +1,6 @@
 ﻿using System.Runtime.InteropServices;
 
-namespace SteamEngineSimController;
+namespace SteamEngineSimController.MemoryHelpers;
 public class KernelMethods {
     [DllImport("Kernel32.dll")]
     private static extern bool ReadProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, byte[] lpBuffer, uint nSize, ref uint lpNumberOfBytesRead);
@@ -12,7 +12,7 @@ public class KernelMethods {
 
         // validate read action
         if (bytesRead != size)
-            throw new Exception($"Read operation from address 0x{address.ToString("X8")} was partial! Expected number of bytes read: {size}; Actual amount: {bytesRead}");
+            throw new Exception($"Read operation from address 0x{address:X8} was partial! Expected number of bytes read: {size}; Actual amount: {bytesRead}");
 
         return buffer;
     }
@@ -27,7 +27,7 @@ public class KernelMethods {
 
         // validate write action
         if (bytesWrittenCount != newData.Length)
-            throw new Exception($"Write operation to address 0x{address.ToString("X8")} failed! Expected number of bytes written: {newData.Length}; Actual amount: {bytesWrittenCount}");
+            throw new Exception($"Write operation to address 0x{address:X8} failed! Expected number of bytes written: {newData.Length}; Actual amount: {bytesWrittenCount}");
     }
 
 

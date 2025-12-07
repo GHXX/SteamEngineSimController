@@ -1,5 +1,5 @@
 ﻿using System.Runtime.InteropServices;
-using static SteamEngineSimController.KernelMethods;
+using static SteamEngineSimController.MemoryHelpers.KernelMethods;
 
 namespace SteamEngineSimController.MemoryHelpers;
 public static class MemoryUtil {
@@ -9,7 +9,7 @@ public static class MemoryUtil {
         var foundElements = new Dictionary<nint, byte[]>();
 
         byte[] bytes;
-        if (!FindMemoryWithWildcards_cache.TryGetValue((gameHandle, start, length), out bytes)) {
+        if (!FindMemoryWithWildcards_cache.TryGetValue((gameHandle, start, length), out bytes!)) {
             bytes = KernelMethods.ReadMemory(gameHandle, start, length);
             FindMemoryWithWildcards_cache.Add((gameHandle, start, length), bytes);
         }
@@ -18,7 +18,7 @@ public static class MemoryUtil {
             bool found = true;
             for (int i = 0; i < bytesToFind.Length; i++) {
                 var currByte = bytes[basePos + i];
-                if (bytesToFind[i].HasValue && bytesToFind[i].Value != currByte) {
+                if (bytesToFind[i].HasValue && bytesToFind[i]!.Value != currByte) {
                     found = false;
                     break;
                 }
@@ -74,10 +74,10 @@ public static class MemoryUtil {
 
     public static void WriteValue<T>(nint handle, nint location, T newValue) {
         var t = typeof(T);
-        byte[] bytesToWrite = null;
+        byte[] bytesToWrite;
         switch (Type.GetTypeCode(t)) {
             case TypeCode.Byte:
-                bytesToWrite = new byte[1] { (byte)(object)newValue }; ;
+                bytesToWrite = [(byte)(object)newValue]; ;
                 break;
             case TypeCode.Int16:
             case TypeCode.Int32:

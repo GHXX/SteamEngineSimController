@@ -27,11 +27,11 @@ public class MemoryLocation<T> {
         MemoryUtil.WriteValue<T>(Handle, Location, newValue);
     }
 
-    public string GetFormattedValue() {
+    public string? GetFormattedValue() {
         var val = GetValue();
         return val switch {
             IntPtr ptr => "0x" + ptr.ToString("X8"),
-            _ => val.ToString()
+            _ => val?.ToString()
         };
     }
 

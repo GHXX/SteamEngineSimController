@@ -13,7 +13,7 @@ internal class Program {
     private static MemoryLocation<float> memlocBoilerPressureMarker = null!;
     private static MemoryLocation<float> memlocActualHeat = null!;
     private static MemoryLocation<float> memlocDesiredHeat = null!;
-    private static ReadOnlyMemoryLocation<float> memlocBoilerPressure = null!;
+    //private static ReadOnlyMemoryLocation<float> memlocBoilerPressure = null!;
 
     public float BoilerPressureMarker350 { get => memlocBoilerPressureMarker.GetValue() * 350; set => memlocBoilerPressureMarker.SetValue(value / 350); }
 
@@ -206,8 +206,6 @@ internal class Program {
         Assert(steamEngineVizStruct.reverserSlider == reverserAddress - sliderValueOffset, "reverser address");
         Assert(steamEngineVizStruct.brakeStopSlider == brakeStopAddress - sliderValueOffset, "brake stop address");
         memlocEngineSpeedMarker = new MemoryLocation<float>(gameHandle, MemoryUtil.ReadValue<IntPtr>(gameHandle, steamEngineVizStruct.engineSpeedMarker + 0x270) + 0x220);
-
-        IntPtr DerefPtr(IntPtr p) => MemoryUtil.ReadValue<IntPtr>(gameHandle, p);
 
         memlocReverser = new MemoryLocation<float>(handle, reverserAddress);
         memlocBrakeStop = new MemoryLocation<float>(handle, brakeStopAddress);
