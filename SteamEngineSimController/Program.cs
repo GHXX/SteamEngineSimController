@@ -10,7 +10,28 @@ internal class Program {
     private static MemoryLocation<float> memlocReverser = null!;
     private static MemoryLocation<float> memlocBrakeStop = null!;
     private static MemoryLocation<float> memlocEngineSpeedMarker = null!;
-    private static MemoryLocation<float> memlocHeat = null!;
+    private static MemoryLocation<float> memlocActualHeat = null!;
+    private static MemoryLocation<float> memlocDesiredHeat = null!;
+
+
+    // X: heater level in memory; Y:
+    private static double[] desiredHeatConversionCoeffs = [5.68319704, -10.60034555]; //[5.62529347, -10.52847886];
+    private static float DesiredHeat01 {
+        get {
+            var x = memlocDesiredHeat.GetValue();
+            var y = Math.Exp(desiredHeatConversionCoeffs[0] * x + desiredHeatConversionCoeffs[1]);
+            return (float)y;
+        }
+
+        set {
+            var y = value;
+            var x = y < 0.01 ? 0 : (Math.Log(y) - desiredHeatConversionCoeffs[1]) / desiredHeatConversionCoeffs[0];
+
+            memlocDesiredHeat.SetValue((float)x);
+        }
+
+    }
+
     //private static MemoryLocation<float> memlocGeneratorSpeed = null!;
 
     private static nint gameHandle = -1;
@@ -66,6 +87,7 @@ internal class Program {
 
             New values:
             New reverser speed: {newReverserSetting:N3}; {reverserPid.StateString}
+            XY pair: {memlocDesiredHeat.GetValue():N3} -> {memlocActualHeat.GetValue():N3}, predicted {DesiredHeat01}
 
             """);
         lastGenSpeed = genSpeedNow;
@@ -168,7 +190,8 @@ internal class Program {
 
         memlocReverser = new MemoryLocation<float>(handle, reverserAddress);
         memlocBrakeStop = new MemoryLocation<float>(handle, brakeStopAddress);
-        memlocHeat = new MemoryLocation<float>(handle, heatAddress);
+        memlocActualHeat = new MemoryLocation<float>(handle, steamEngineVizStruct.heatSlider +sliderValueOffset + 0xe8);
+        memlocDesiredHeat = new MemoryLocation<float>(handle, steamEngineVizStruct.heatSlider +sliderValueOffset + 0xa4); // seems to range from 0 to 1.875
         //memlocGeneratorSpeed = new MemoryLocation<float>(handle, (nint)generatorSpeedOffset);
 
         reverserPid = new PID(0.01, 1e-5, 0, memlocReverser.GetValue(), false, (0, 1));
