@@ -14,20 +14,50 @@ public static class MemoryUtil {
             FindMemoryWithWildcards_cache.Add((gameHandle, start, length), bytes);
         }
 
-        for (int basePos = 0; basePos < bytes.Length - bytesToFind.Length; basePos += 1) {
-            bool found = true;
-            for (int i = 0; i < bytesToFind.Length; i++) {
-                var currByte = bytes[basePos + i];
-                if (bytesToFind[i].HasValue && bytesToFind[i]!.Value != currByte) {
-                    found = false;
-                    break;
+        if (bytesToFind.Contains(null)) {
+
+            for (int basePos = 0; basePos < bytes.Length - bytesToFind.Length; basePos += 1) {
+                bool found = true;
+                for (int i = 0; i < bytesToFind.Length; i++) {
+                    var currByte = bytes[basePos + i];
+                    if (bytesToFind[i].HasValue && bytesToFind[i]!.Value != currByte) {
+                        found = false;
+                        break;
+                    }
+
                 }
 
+                if (found) {
+                    foundElements.Add(nint.Add(start, basePos), bytes.Skip(basePos).Take(bytesToFind.Length).ToArray());
+                }
             }
 
-            if (found) {
-                foundElements.Add(nint.Add(start, basePos), bytes.Skip(basePos).Take(bytesToFind.Length).ToArray());
+        } else { // much faster variant if we dont use any special filtering. Could technically extend this also to filtering if the first value is not a wildcard.
+            var nonNullFilter = bytesToFind.Select(x => x!.Value).ToArray();
+
+            var currStartPos = 0;
+
+            do {
+                var foundCandidate = Array.IndexOf(bytes, nonNullFilter[0], currStartPos);
+                if (foundCandidate == -1) break;
+
+                bool found = true;
+                for (int i = 1; i < nonNullFilter.Length; i++) {
+                    var currByte = bytes[foundCandidate + i];
+                    if (nonNullFilter[i] != currByte) {
+                        found = false;
+                        break;
+                    }
+                }
+
+                if (found) {
+                    foundElements.Add(nint.Add(start, foundCandidate), bytes.Skip(foundCandidate).Take(nonNullFilter.Length).ToArray());
+                }
+
+
+                currStartPos = foundCandidate+1;
             }
+            while (currStartPos + nonNullFilter.Length <= bytes.Length);
         }
 
         return foundElements;
