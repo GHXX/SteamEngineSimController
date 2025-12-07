@@ -10,8 +10,12 @@ internal class Program {
     private static MemoryLocation<float> memlocReverser = null!;
     private static MemoryLocation<float> memlocBrakeStop = null!;
     private static MemoryLocation<float> memlocEngineSpeedMarker = null!;
+    private static MemoryLocation<float> memlocBoilerPressureMarker = null!;
     private static MemoryLocation<float> memlocActualHeat = null!;
     private static MemoryLocation<float> memlocDesiredHeat = null!;
+    private static ReadOnlyMemoryLocation<float> memlocBoilerPressure = null!;
+
+    public float BoilerPressureMarker350 { get => memlocBoilerPressureMarker.GetValue() * 350; set => memlocBoilerPressureMarker.SetValue(value / 350); }
 
 
     // X: heater level in memory; Y:
@@ -46,9 +50,21 @@ internal class Program {
             return rpmValue;
         }
     }
+    private static IntPtr boilerPressurePtr = -1;
+    private static float BoilerPressure {
+        get {
+            var rpmText = string.Join("", KernelMethods.ReadMemory(gameHandle, boilerPressurePtr, 16).TakeWhile(x => x != '\0').Select(x => (char)x));
+            var rpmValue = rpmText.EndsWith(" PSI") && float.TryParse(string.Join("", rpmText.SkipLast(" PSI".Length)), CultureInfo.InvariantCulture, out var res) ? res : -1;
+            if (rpmValue < 0) {
+                throw new Exception(); // maybe clean this up loll
+            }
+            return rpmValue;
+        }
+    }
 
 
     private static PID reverserPid = null!;
+    private static PID heatPid = null!;
 
     private static void Main(string[] args) {
         Thread.CurrentThread.CurrentCulture = Thread.CurrentThread.CurrentUICulture = CultureInfo.InvariantCulture;
@@ -80,6 +96,12 @@ internal class Program {
         var newReverserSetting = Math.Clamp(reverserPid.Step(timeSecondsNow, desiredGenSpeed, genSpeedNow), 0, 1);
         memlocReverser.SetValue((float)Math.Clamp(newReverserSetting, 0.5, 1));
         memlocBrakeStop.SetValue((float)(Math.Clamp((-newReverserSetting * 2 + 1), 0, 1)));
+
+        var desiredPressure = memlocBoilerPressureMarker.GetValue();
+        var newHeatSetting = Math.Clamp(heatPid.Step(timeSecondsNow, desiredPressure*350, BoilerPressure), 0, 1);
+        DesiredHeat01 = (float)newHeatSetting;
+
+
         Console.Clear();
         Console.WriteLine($"""
             Marker pos: {engineSpeedMarkerPos * 700:N2} --> Desired generator speed: {desiredGenSpeed}
@@ -87,8 +109,7 @@ internal class Program {
 
             New values:
             New reverser speed: {newReverserSetting:N3}; {reverserPid.StateString}
-            XY pair: {memlocDesiredHeat.GetValue():N3} -> {memlocActualHeat.GetValue():N3}, predicted {DesiredHeat01}
-
+            New heat setting: {newHeatSetting:N3}; {heatPid.StateString}
             """);
         lastGenSpeed = genSpeedNow;
     }
@@ -190,10 +211,15 @@ internal class Program {
 
         memlocReverser = new MemoryLocation<float>(handle, reverserAddress);
         memlocBrakeStop = new MemoryLocation<float>(handle, brakeStopAddress);
-        memlocActualHeat = new MemoryLocation<float>(handle, steamEngineVizStruct.heatSlider +sliderValueOffset + 0xe8);
-        memlocDesiredHeat = new MemoryLocation<float>(handle, steamEngineVizStruct.heatSlider +sliderValueOffset + 0xa4); // seems to range from 0 to 1.875
+        memlocActualHeat = new MemoryLocation<float>(handle, steamEngineVizStruct.heatSlider + sliderValueOffset + 0xe8);
+        memlocDesiredHeat = new MemoryLocation<float>(handle, steamEngineVizStruct.heatSlider + sliderValueOffset + 0xa4); // seems to range from 0 to 1.875 and be scaled exponentially?
+
+        boilerPressurePtr = steamEngineVizStruct.pressureReadout + sliderValueOffset + 0x20;
+        memlocBoilerPressureMarker = new ReadOnlyMemoryLocation<float>(handle, MemoryUtil.ReadValue<IntPtr>(gameHandle, steamEngineVizStruct.pressureMarker + 0x270) + 0x220);
+
         //memlocGeneratorSpeed = new MemoryLocation<float>(handle, (nint)generatorSpeedOffset);
 
         reverserPid = new PID(0.01, 1e-5, 0, memlocReverser.GetValue(), false, (0, 1));
+        heatPid = new PID(0.01, 1e-4, 0, DesiredHeat01, false, (0, 1));
     }
 }

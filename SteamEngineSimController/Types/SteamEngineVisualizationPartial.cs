@@ -11,4 +11,6 @@ public readonly struct SteamEngineVisualizationPartial {
 
     public readonly IntPtr throttleSlider, blowOffValveSlider, starterSlider, brakeSlider;
     public readonly IntPtr brakeStopSlider, whistleSliger, reverserSlider; // pattern to be searched
+
+    public readonly IntPtr pressureReadout;
 }
