@@ -54,21 +54,27 @@ internal class Program {
 
     private static float BoilerPressure {
         get {
-            var psiText = string.Join("",
-                    //KernelMethods.ReadMemory(gameHandle, MemoryUtil.ReadValue<IntPtr>(gameHandle, steamEngineVisualizationStruct.pressureReadout + 0x260), 16)
-                    KernelMethods.ReadMemory(gameHandle, steamEngineVisualizationStruct.pressureReadout + 0x260, 16)
-                    .TakeWhile(x => x != '\0').Select(x => (char)x)
-                );
 
-            float rv = 0;
-            if (psiText.EndsWith(" PSI") && float.TryParse(string.Join("", psiText.SkipLast(" PSI".Length)), CultureInfo.InvariantCulture, out var res)) {
-                rv = res;
-            } else if (psiText.Contains("IN HG") && float.TryParse(psiText.Split("IN HG")[0], out var res2)) {
-                rv = -res2;
-            } else {
-                throw new Exception("Failed to parse boiler pressure string");
+            var potentiallyInlinedStringPtr = steamEngineVisualizationStruct.pressureReadout + 0x260;
+            float? TryRead(bool doDereference) {
+                var stringStartAddress = doDereference ? MemoryUtil.ReadValue<IntPtr>(gameHandle, potentiallyInlinedStringPtr) : potentiallyInlinedStringPtr;
+                string psiText;
+                try {
+                    psiText = string.Join("", KernelMethods.ReadMemory(gameHandle, stringStartAddress, 16).TakeWhile(x => x != '\0').Select(x => (char)x));
+                } catch (Exception) { return null; } // retry with the other method
+
+                float rv = 0;
+                if (psiText.EndsWith(" PSI") && float.TryParse(string.Join("", psiText.SkipLast(" PSI".Length)), CultureInfo.InvariantCulture, out var res)) {
+                    rv = res;
+                } else if (psiText.Contains("IN HG") && float.TryParse(psiText.Split("IN HG")[0], out var res2)) {
+                    rv = -res2;
+                } else {
+                    throw new Exception("Failed to parse boiler pressure string");
+                }
+                return rv;
             }
-            return rv;
+
+            return TryRead(true) ?? TryRead(false) ?? throw new Exception("Boiler pressure memread failed in both ways");
         }
     }
 
