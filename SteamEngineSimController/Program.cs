@@ -55,7 +55,8 @@ internal class Program {
     private static float BoilerPressure {
         get {
             var psiText = string.Join("",
-                    KernelMethods.ReadMemory(gameHandle, MemoryUtil.ReadValue<IntPtr>(gameHandle, steamEngineVisualizationStruct.pressureReadout + 0x260), 16)
+                    //KernelMethods.ReadMemory(gameHandle, MemoryUtil.ReadValue<IntPtr>(gameHandle, steamEngineVisualizationStruct.pressureReadout + 0x260), 16)
+                    KernelMethods.ReadMemory(gameHandle, steamEngineVisualizationStruct.pressureReadout + 0x260, 16)
                     .TakeWhile(x => x != '\0').Select(x => (char)x)
                 );
 
