@@ -52,6 +52,7 @@ internal class Program {
         }
     }
 
+    static bool lastSuccessfulBoilerPressureRead = true;
     private static float BoilerPressure {
         get {
 
@@ -61,6 +62,7 @@ internal class Program {
                 string psiText;
                 try {
                     psiText = string.Join("", KernelMethods.ReadMemory(gameHandle, stringStartAddress, 16).TakeWhile(x => x != '\0').Select(x => (char)x));
+                    lastSuccessfulBoilerPressureRead = doDereference;
                 } catch (Exception) { return null; } // retry with the other method
 
                 float rv = 0;
@@ -74,7 +76,7 @@ internal class Program {
                 return rv;
             }
 
-            return TryRead(true) ?? TryRead(false) ?? throw new Exception("Boiler pressure memread failed in both ways");
+            return TryRead(lastSuccessfulBoilerPressureRead) ?? TryRead(!lastSuccessfulBoilerPressureRead) ?? throw new Exception("Boiler pressure memread failed in both ways");
         }
     }
 
