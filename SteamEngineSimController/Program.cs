@@ -30,7 +30,15 @@ internal class Program {
 
         set {
             var y = value;
-            var x = y < 0.01 ? 0 : (Math.Log(y) - desiredHeatConversionCoeffs[1]) / desiredHeatConversionCoeffs[0];
+
+            double x;
+            if (y < 0.01) {
+                x = 0;
+            } else if (y > 1 - 0.01) {
+                x = 1.875;
+            } else {
+                x = (double)((Math.Log(y) - desiredHeatConversionCoeffs[1]) / desiredHeatConversionCoeffs[0]);
+            }
 
             memlocDesiredHeat.SetValue((float)x);
         }
@@ -84,7 +92,7 @@ internal class Program {
     private static PID reverserPid = null!;
     private static PID heatPid = null!;
 
-    private static ConsoleDoubleBuffered console = new ();
+    private static ConsoleDoubleBuffered console = new();
 
     private static void Main(string[] args) {
         console.DisableBuffering = true;
