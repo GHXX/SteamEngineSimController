@@ -52,7 +52,7 @@ internal class Program {
         }
     }
 
-    static bool lastSuccessfulBoilerPressureRead = true;
+    private static bool lastSuccessfulBoilerPressureRead = true;
     private static float BoilerPressure {
         get {
 
@@ -62,7 +62,6 @@ internal class Program {
                 string psiText;
                 try {
                     psiText = string.Join("", KernelMethods.ReadMemory(gameHandle, stringStartAddress, 16).TakeWhile(x => x != '\0').Select(x => (char)x));
-                    lastSuccessfulBoilerPressureRead = doDereference;
                 } catch (Exception) { return null; } // retry with the other method
 
                 float rv = 0;
@@ -73,6 +72,7 @@ internal class Program {
                 } else {
                     throw new Exception("Failed to parse boiler pressure string");
                 }
+                lastSuccessfulBoilerPressureRead = doDereference; // on success, remember the option that worked
                 return rv;
             }
 
