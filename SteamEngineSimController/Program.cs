@@ -260,7 +260,7 @@ internal class Program {
 
         //memlocGeneratorSpeed = new MemoryLocation<float>(handle, (nint)generatorSpeedOffset);
 
-        reverserPid = new PID(0.01, 1e-5, 0, memlocReverser.GetValue(), false, (0, 1));
+        reverserPid = new PID(0.01, 5e-5, 0, memlocReverser.GetValue(), false, (0, 1));
         heatPid = new PID(0.01, 1e-4, 0, DesiredHeat01, false, (0, 1));
     }
 }
