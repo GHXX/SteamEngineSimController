@@ -84,20 +84,26 @@ internal class Program {
     private static PID reverserPid = null!;
     private static PID heatPid = null!;
 
+    private static ConsoleDoubleBuffered console = new ();
+
     private static void Main(string[] args) {
+        console.DisableBuffering = true;
         Thread.CurrentThread.CurrentCulture = Thread.CurrentThread.CurrentUICulture = CultureInfo.InvariantCulture;
         Console.Title = "Steam engine sim controller";
         while (true) {
             try {
                 var proc = Process.GetProcessesByName("atg-steam-engine-demo").Single();
-
+                console.DisableBuffering = true;
                 Init(proc);
+                console.DisableBuffering = false;
                 while (!proc.HasExited) {
                     Update(proc);
+                    console.ShowBuffer();
                     Thread.Sleep(500);
                 }
             } catch (Exception ex) {
-                Console.WriteLine($"Caught fatal exception: {ex}");
+                console.DisableBuffering = true;
+                console.WriteLine($"Caught fatal exception: {ex}");
             }
             Thread.Sleep(1000);
         }
@@ -121,8 +127,8 @@ internal class Program {
         DesiredHeat01 = (float)newHeatSetting;
 
 
-        Console.Clear();
-        Console.WriteLine($"""
+        //Console.Clear();
+        console.WriteLine($"""
             Marker pos: {engineSpeedMarkerPos * 700:N2} --> Desired generator speed: {desiredGenSpeed}
             Generator speed delta: {genSpeedNow - lastGenSpeed}
             Boiler pressure: {currBoilerPressure} PSI
@@ -141,7 +147,7 @@ internal class Program {
         var procMemLen = proc.MainModule!.ModuleMemorySize;
 
 
-        Console.WriteLine("Getting ram pages...");
+        console.WriteLine("Getting ram pages...");
         var pages = MemoryUtil.GetMemoryPages(handle).Where(x => x.Protect == KernelMethods.FlPageProtect.PAGE_READWRITE).ToArray();
 
         nint[] FindMultipleWidgetValueAddresses(string pattern) {
@@ -157,7 +163,7 @@ internal class Program {
             .Select(x => (byte?)byte.Parse(x, NumberStyles.HexNumber)).ToArray(), pages);
             return matches.Single().Key + offset; // offset because the value we are looking for is before the inlined 25...-string
         }
-        Console.WriteLine("Searching widgets...");
+        console.WriteLine("Searching widgets...");
         var reverserAddress = FindWidgetValueAddress("25 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 0F 00 00 00 00 00 00 00 52 45 56 45 52 53 45 52 00 00 00 00");
         var brakeStopAddress = FindWidgetValueAddress("25 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 0F 00 00 00 00 00 00 00 42 52 41 4B 45 20 53 54 4F 50 00 00 00 00 00 00");
         var whistleAddress = FindWidgetValueAddress("25 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 0F 00 00 00 00 00 00 00 57 48 49 53 54 4C 45 00 00 00 00 00 00 00 00 00");
@@ -172,7 +178,7 @@ internal class Program {
         //var rpmText = string.Join("", KernelMethods.ReadMemory(handle, generatorRpmTextAddress, 16).TakeWhile(x => x != '\0').Select(x=>(char)x));
         //var rpmValue = rpmText.EndsWith(" RPM") && float.TryParse(string.Join("", rpmText.SkipLast(" RPM".Length)), CultureInfo.InvariantCulture, out var res) ? res : -1;
 
-        Console.WriteLine("Searching for main game object...");
+        console.WriteLine("Searching for main game object...");
         var steamEngineVisualizationKnownFieldOffset = MemoryUtil.FindMemoryWithWildcardsAcrossALLPages(handle,
             new[] { brakeStopAddress, whistleAddress, reverserAddress }
             .Select(x => BitConverter.GetBytes(x - 544).ToArray())
@@ -184,7 +190,7 @@ internal class Program {
         var structSize = Marshal.SizeOf<SteamEngineVisualizationPartial>();
         var brakeStopStructOffset = Marshal.OffsetOf<SteamEngineVisualizationPartial>(nameof(SteamEngineVisualizationPartial.brakeStopSlider));
         var steamEngineVizOffset = steamEngineVisualizationKnownFieldOffset - brakeStopStructOffset;
-        Console.WriteLine($"Main game object found at roughly {steamEngineVizOffset}");
+        console.WriteLine($"Main game object found at roughly {steamEngineVizOffset}");
         var structBytes = KernelMethods.ReadMemory(gameHandle, steamEngineVizOffset, (uint)structSize);
         SteamEngineVisualizationPartial steamEngineVizStruct;
         GCHandle gch = GCHandle.Alloc(structBytes, GCHandleType.Pinned);
@@ -203,7 +209,7 @@ internal class Program {
         //                                                                   .Select(x => (byte?)x)
         //                                                                   .ToArray(), pages);
         //    if (steamEngineVisualizationPrivFieldPtr.Count != 0) {
-        //        Console.WriteLine($"found at -{i}");
+        //        console.WriteLine($"found at -{i}");
         //    }
         //}
 
@@ -225,7 +231,7 @@ internal class Program {
         //                                 .ToArray(), [mainVizMempage]);
 
         //    if (fieldPtrCandidate.Count != 0) {
-        //        Console.WriteLine($"found at field at -{i}: at {(string.Join(", ", fieldPtrCandidate.Keys.Select(x=>$"0x{x:X}")))}");
+        //        console.WriteLine($"found at field at -{i}: at {(string.Join(", ", fieldPtrCandidate.Keys.Select(x=>$"0x{x:X}")))}");
         //    }
         //}
 
