@@ -14,10 +14,16 @@ internal class Program {
     private static MemoryLocation<float> memlocActualHeat = null!;
     private static MemoryLocation<float> memlocDesiredHeat = null!;
     private static MemoryLocation<float> memlocWaterPump = null!;
+    private static MemoryLocation<float> memlocWaterLevelMarker = null!;
     private static SteamEngineVisualizationPartial steamEngineVisualizationStruct = default;
     //private static ReadOnlyMemoryLocation<float> memlocBoilerPressure = null!;
 
     public float BoilerPressureMarker350 { get => memlocBoilerPressureMarker.GetValue() * 350; set => memlocBoilerPressureMarker.SetValue(value / 350); }
+
+    /// <summary>
+    /// Unit: CC (as ingame), The raw value ranges from 0 to 1
+    /// </summary>
+    public float WaterLevelMarker80 { get => memlocWaterLevelMarker.GetValue() * 80; set => memlocWaterLevelMarker.SetValue(value / 80); }
 
 
     // X: heater level in memory; Y:
@@ -89,9 +95,35 @@ internal class Program {
         }
     }
 
+    // if this breaks at some point then we have to use the same trick as with BoilerPressure
+    private static float BoilerWaterLevel {
+        get {
+            var potentiallyInlinedStringPtr = steamEngineVisualizationStruct.waterLevelReadout + 0x260;
+            float? TryRead(bool doDereference) {
+                var stringStartAddress = doDereference ? MemoryUtil.ReadValue<IntPtr>(gameHandle, potentiallyInlinedStringPtr) : potentiallyInlinedStringPtr;
+                string ccText;
+                try {
+                    ccText = string.Join("", KernelMethods.ReadMemory(gameHandle, stringStartAddress, 16).TakeWhile(x => x != '\0').Select(x => (char)x));
+                } catch (Exception) { return null; } // retry with the other method
+
+                float rv = 0;
+                if (ccText.EndsWith(" CC") && float.TryParse(string.Join("", ccText.SkipLast(" CC".Length)), CultureInfo.InvariantCulture, out var res)) {
+                    rv = res;
+                } else {
+                    throw new Exception("Failed to parse boiler pressure string");
+                }
+                //lastSuccessfulBoilerPressureRead = doDereference; // on success, remember the option that worked
+                return rv;
+            }
+
+            return TryRead(false) /*?? TryRead(!lastSuccessfulBoilerPressureRead)*/ ?? throw new Exception("Boiler pressure memread failed in both ways");
+        }
+    }
+
 
     private static PID reverserPid = null!;
     private static PID heatPid = null!;
+    private static PID waterLevelPid = null!;
 
     private static ConsoleDoubleBuffered console = new();
 
@@ -135,16 +167,23 @@ internal class Program {
         var newHeatSetting = Math.Clamp(heatPid.Step(timeSecondsNow, desiredPressure * 350, currBoilerPressure), 0, 1);
         DesiredHeat01 = (float)newHeatSetting;
 
+        var desiredWaterLevel = memlocWaterLevelMarker.GetValue() * 80; // 0-80CC
+        var currWaterLevel = BoilerWaterLevel; // 0-80CC
+        var newWaterInletSetting = Math.Clamp(waterLevelPid.Step(timeSecondsNow, desiredWaterLevel, currWaterLevel), 0, 1);
+        memlocWaterPump.SetValue((float)newWaterInletSetting);
+        //var currBoilerWaterLevel = 
 
         //Console.Clear();
         console.WriteLine($"""
             Marker pos: {engineSpeedMarkerPos * 700:N2} --> Desired generator speed: {desiredGenSpeed}
             Generator speed delta: {genSpeedNow - lastGenSpeed}
             Boiler pressure: {currBoilerPressure} PSI
+            Water level: {BoilerWaterLevel} CC
 
             New values:
             New reverser speed: {newReverserSetting:N3}; {reverserPid.StateString}
             New heat setting: {newHeatSetting:N3}; {heatPid.StateString}
+            New inlet setting: {newWaterInletSetting:N3}
             """);
         lastGenSpeed = genSpeedNow;
     }
@@ -255,7 +294,7 @@ internal class Program {
         memlocActualHeat = new MemoryLocation<float>(handle, steamEngineVizStruct.heatSlider + sliderValueOffset + 0xe8);
         memlocDesiredHeat = new MemoryLocation<float>(handle, steamEngineVizStruct.heatSlider + sliderValueOffset + 0xa4); // seems to range from 0 to 1.875 and be scaled exponentially?
 
-        T deref<T>(IntPtr x) => MemoryUtil.ReadValue<T>(gameHandle, x); 
+        T deref<T>(IntPtr x) => MemoryUtil.ReadValue<T>(gameHandle, x);
 
         int waterPumpVis_waterValveSliderOffset = 0x2b0; // offset to the RadialSlider m_waterValveSlider field in WaterPumpVisualization
         var waterPumpRadialSliderAddress = deref<IntPtr>(steamEngineVisualizationStruct.waterPumpVis + waterPumpVis_waterValveSliderOffset);
@@ -264,10 +303,12 @@ internal class Program {
         //var boilerPressurePtr_lVar1 = MemoryUtil.ReadValue<IntPtr>(handle, steamEngineVizStruct.pressureReadout + 0x440);
         //var boilerPressurePtr_lVar1_2 = MemoryUtil.ReadValue<IntPtr>(handle, steamEngineVizStruct.pressureReadout + 0x438);
         memlocBoilerPressureMarker = new ReadOnlyMemoryLocation<float>(handle, MemoryUtil.ReadValue<IntPtr>(gameHandle, steamEngineVizStruct.pressureMarker + 0x270) + 0x220);
+        memlocWaterLevelMarker = new ReadOnlyMemoryLocation<float>(handle, MemoryUtil.ReadValue<IntPtr>(gameHandle, steamEngineVizStruct.waterLevelMarker + 0x270) + 0x220);
 
         //memlocGeneratorSpeed = new MemoryLocation<float>(handle, (nint)generatorSpeedOffset);
 
         reverserPid = new PID(0.01, 5e-5, 0, memlocReverser.GetValue(), false, (0, 1));
         heatPid = new PID(0.01, 1e-4, 0, DesiredHeat01, false, (0, 1));
+        waterLevelPid = new PID(0.1, 1e-3, 0, memlocWaterPump.GetValue(), false, (0, 1));
     }
 }

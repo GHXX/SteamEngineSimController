@@ -9,7 +9,7 @@ This project is not affiliated with the developer(s) of Steam Engine Simulator o
 Currently all this does is, determine location of some memory addresses and then read the *generator speed*, feed it to a PI(D) controller and compute a new value for the *reverser handle* and then set this value in the game.
 The desired speed is inferred from the engine speed rpm dial marker. This marker value is divded by 700 and then multiplied by 1200 and becomes your desired generator speed. In a way the marker is simply translated over 1 to 1. The reason for the odd math is because the dials have different ranges.
 
-Additionally it also steers the heat source percentage to keep your boiler pressure at the marker position on that pressure dial.
+Additionally it also steers the heat source percentage to keep your boiler pressure at the marker position on that pressure dial. Similarly with the water inlet valve and the water level marker.
 
 I might extend it some more in the future, but it does work pretty well currently.
 
