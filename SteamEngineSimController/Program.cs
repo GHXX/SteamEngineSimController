@@ -13,6 +13,7 @@ internal class Program {
     private static MemoryLocation<float> memlocBoilerPressureMarker = null!;
     private static MemoryLocation<float> memlocActualHeat = null!;
     private static MemoryLocation<float> memlocDesiredHeat = null!;
+    private static MemoryLocation<float> memlocWaterPump = null!;
     private static SteamEngineVisualizationPartial steamEngineVisualizationStruct = default;
     //private static ReadOnlyMemoryLocation<float> memlocBoilerPressure = null!;
 
@@ -253,6 +254,12 @@ internal class Program {
         memlocBrakeStop = new MemoryLocation<float>(handle, brakeStopAddress);
         memlocActualHeat = new MemoryLocation<float>(handle, steamEngineVizStruct.heatSlider + sliderValueOffset + 0xe8);
         memlocDesiredHeat = new MemoryLocation<float>(handle, steamEngineVizStruct.heatSlider + sliderValueOffset + 0xa4); // seems to range from 0 to 1.875 and be scaled exponentially?
+
+        T deref<T>(IntPtr x) => MemoryUtil.ReadValue<T>(gameHandle, x); 
+
+        int waterPumpVis_waterValveSliderOffset = 0x2b0; // offset to the RadialSlider m_waterValveSlider field in WaterPumpVisualization
+        var waterPumpRadialSliderAddress = deref<IntPtr>(steamEngineVisualizationStruct.waterPumpVis + waterPumpVis_waterValveSliderOffset);
+        memlocWaterPump = new MemoryLocation<float>(handle, waterPumpRadialSliderAddress + sliderValueOffset);
 
         //var boilerPressurePtr_lVar1 = MemoryUtil.ReadValue<IntPtr>(handle, steamEngineVizStruct.pressureReadout + 0x440);
         //var boilerPressurePtr_lVar1_2 = MemoryUtil.ReadValue<IntPtr>(handle, steamEngineVizStruct.pressureReadout + 0x438);

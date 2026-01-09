@@ -6,6 +6,10 @@ namespace SteamEngineSimController.Types;
 public readonly struct SteamEngineVisualizationPartial {
     // some leading fields are omitted entirely.
 
+    public readonly IntPtr waterPumpVis;
+
+    public readonly IntPtr steamParticleForceField, cylinderVis, tankObject, scythe, damageToggle;
+
     public readonly IntPtr heatSlider, heatOffsetSlider;
     public readonly IntPtr pressureMarker, waterTemperatureMarker, waterLevelMarker, waterFlowRatemarker, engineSpeedMarker;
 
