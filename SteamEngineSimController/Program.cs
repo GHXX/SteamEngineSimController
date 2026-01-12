@@ -238,7 +238,7 @@ internal class Program {
         var structSize = Marshal.SizeOf<SteamEngineVisualizationPartial>();
         var brakeStopStructOffset = Marshal.OffsetOf<SteamEngineVisualizationPartial>(nameof(SteamEngineVisualizationPartial.brakeStopSlider));
         var steamEngineVizOffset = steamEngineVisualizationKnownFieldOffset - brakeStopStructOffset;
-        console.WriteLine($"Main game object found at roughly {steamEngineVizOffset}");
+        console.WriteLine($"Main game object found at roughly 0x{steamEngineVizOffset:X8}");
         var structBytes = KernelMethods.ReadMemory(gameHandle, steamEngineVizOffset, (uint)structSize);
         SteamEngineVisualizationPartial steamEngineVizStruct;
         GCHandle gch = GCHandle.Alloc(structBytes, GCHandleType.Pinned);
