@@ -85,7 +85,7 @@ internal class Program {
                 } else if (psiText.Contains("IN HG") && float.TryParse(psiText.Split("IN HG")[0], out var res2)) {
                     rv = -res2;
                 } else {
-                    throw new Exception("Failed to parse boiler pressure string");
+                    return null;
                 }
                 lastSuccessfulBoilerPressureRead = doDereference; // on success, remember the option that worked
                 return rv;
