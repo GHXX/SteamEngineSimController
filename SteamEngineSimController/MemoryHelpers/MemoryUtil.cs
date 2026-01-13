@@ -43,7 +43,11 @@ public static class MemoryUtil {
 
                 bool found = true;
                 for (int i = 1; i < nonNullFilter.Length; i++) {
-                    var currByte = bytes[foundCandidate + i];
+                    var idx = foundCandidate + i;
+                    if (idx >= bytes.Length)
+                        break;
+
+                    var currByte = bytes[idx];
                     if (nonNullFilter[i] != currByte) {
                         found = false;
                         break;

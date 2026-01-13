@@ -218,7 +218,13 @@ internal class Program {
         var heatAddress = FindWidgetValueAddress("25 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 0F 00 00 00 00 00 00 00 48 45 41 54 00 00 00");
         var genRpmTextAddressCandidates = FindMultipleWidgetValueAddresses("47 45 4E 45 52 41 54 4F 52 20 53 50 45 45 44 00").Select(x => x + 38).ToArray();
         var generatorRpmTextAddresses = genRpmTextAddressCandidates.Where(c => {
-            var stringRep = string.Join("", KernelMethods.ReadMemory(handle, c - 7, 64).Select(x => (char)x));
+            byte[] res;
+            try {
+                res = KernelMethods.ReadMemory(handle, c - 7, 64);
+            } catch (Exception) {
+                return false;
+            }
+            var stringRep = string.Join("", res.Select(x => (char)x));
             return stringRep.Replace(" RPM", "").Length == stringRep.Length - 2 * " RPM".Length;
         }).ToArray();
         var generatorRpmTextAddress = generatorRpmTextAddresses.Single() - 6;
