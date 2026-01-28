@@ -67,56 +67,37 @@ internal class Program {
         }
     }
 
-    private static bool lastSuccessfulBoilerPressureRead = true;
     private static float BoilerPressure {
         get {
 
-            var potentiallyInlinedStringPtr = steamEngineVisualizationStruct.pressureReadout + 0x260;
-            float? TryRead(bool doDereference) {
-                var stringStartAddress = doDereference ? MemoryUtil.ReadValue<IntPtr>(gameHandle, potentiallyInlinedStringPtr) : potentiallyInlinedStringPtr;
-                string psiText;
-                try {
-                    psiText = string.Join("", KernelMethods.ReadMemory(gameHandle, stringStartAddress, 16).TakeWhile(x => x != '\0').Select(x => (char)x));
-                } catch (Exception) { return null; } // retry with the other method
+            var stringAddress = steamEngineVisualizationStruct.pressureReadout + 0x260;
+            var psiText = MemoryUtil.ReadString(gameHandle, stringAddress);
 
-                float rv = 0;
-                if (psiText.EndsWith(" PSI") && float.TryParse(string.Join("", psiText.SkipLast(" PSI".Length)), CultureInfo.InvariantCulture, out var res)) {
-                    rv = res;
-                } else if (psiText.Contains("IN HG") && float.TryParse(psiText.Split("IN HG")[0], out var res2)) {
-                    rv = -res2;
-                } else {
-                    return null;
-                }
-                lastSuccessfulBoilerPressureRead = doDereference; // on success, remember the option that worked
-                return rv;
+            float rv = 0;
+            if (psiText.EndsWith(" PSI") && float.TryParse(string.Join("", psiText.SkipLast(" PSI".Length)), CultureInfo.InvariantCulture, out var res)) {
+                rv = res;
+            } else if (psiText.Contains("IN HG") && float.TryParse(psiText.Split("IN HG")[0], out var res2)) {
+                rv = -res2;
+            } else {
+                throw new Exception("Failed to parse boiler pressure string");
             }
+            return rv;
 
-            return TryRead(lastSuccessfulBoilerPressureRead) ?? TryRead(!lastSuccessfulBoilerPressureRead) ?? throw new Exception("Boiler pressure memread failed in both ways");
         }
     }
 
-    // if this breaks at some point then we have to use the same trick as with BoilerPressure
     private static float BoilerWaterLevel {
         get {
-            var potentiallyInlinedStringPtr = steamEngineVisualizationStruct.waterLevelReadout + 0x260;
-            float? TryRead(bool doDereference) {
-                var stringStartAddress = doDereference ? MemoryUtil.ReadValue<IntPtr>(gameHandle, potentiallyInlinedStringPtr) : potentiallyInlinedStringPtr;
-                string ccText;
-                try {
-                    ccText = string.Join("", KernelMethods.ReadMemory(gameHandle, stringStartAddress, 16).TakeWhile(x => x != '\0').Select(x => (char)x));
-                } catch (Exception) { return null; } // retry with the other method
+            var stringAddress = steamEngineVisualizationStruct.waterLevelReadout + 0x260;
+            string ccText = MemoryUtil.ReadString(gameHandle, stringAddress);
 
-                float rv = 0;
-                if (ccText.EndsWith(" CC") && float.TryParse(string.Join("", ccText.SkipLast(" CC".Length)), CultureInfo.InvariantCulture, out var res)) {
-                    rv = res;
-                } else {
-                    throw new Exception("Failed to parse boiler pressure string");
-                }
-                //lastSuccessfulBoilerPressureRead = doDereference; // on success, remember the option that worked
-                return rv;
+            float rv = 0;
+            if (ccText.EndsWith(" CC") && float.TryParse(string.Join("", ccText.SkipLast(" CC".Length)), CultureInfo.InvariantCulture, out var res)) {
+                rv = res;
+            } else {
+                throw new Exception("Failed to parse water level string");
             }
-
-            return TryRead(false) /*?? TryRead(!lastSuccessfulBoilerPressureRead)*/ ?? throw new Exception("Boiler pressure memread failed in both ways");
+            return rv;
         }
     }
 
@@ -241,18 +222,10 @@ internal class Program {
             .ToArray(), pages).Single().Key;
 
 
-        var structSize = Marshal.SizeOf<SteamEngineVisualizationPartial>();
         var brakeStopStructOffset = Marshal.OffsetOf<SteamEngineVisualizationPartial>(nameof(SteamEngineVisualizationPartial.brakeStopSlider));
         var steamEngineVizOffset = steamEngineVisualizationKnownFieldOffset - brakeStopStructOffset;
         console.WriteLine($"Main game object found at roughly 0x{steamEngineVizOffset:X8}");
-        var structBytes = KernelMethods.ReadMemory(gameHandle, steamEngineVizOffset, (uint)structSize);
-        SteamEngineVisualizationPartial steamEngineVizStruct;
-        GCHandle gch = GCHandle.Alloc(structBytes, GCHandleType.Pinned);
-        try {
-            steamEngineVizStruct = Marshal.PtrToStructure<SteamEngineVisualizationPartial>(gch.AddrOfPinnedObject());
-        } finally {
-            gch.Free();
-        }
+        var steamEngineVizStruct = MemoryUtil.ReadStruct<SteamEngineVisualizationPartial>(gameHandle, steamEngineVizOffset);
 
         #region MainStructRediscoveryCode
         //for (int i = 544; i <= 4096; i += 4) { // Main struct offset discovery
