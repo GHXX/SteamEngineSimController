@@ -1,4 +1,5 @@
-﻿using System.Runtime.InteropServices;
+﻿using SteamEngineSimController.Types;
+using System.Runtime.InteropServices;
 using static SteamEngineSimController.MemoryHelpers.KernelMethods;
 
 namespace SteamEngineSimController.MemoryHelpers;
@@ -104,6 +105,27 @@ public static class MemoryUtil {
             default:
                 throw new NotImplementedException("Invalid type");
         }
+    }
+
+    public static T ReadStruct<T>(nint gameHandle, IntPtr address) where T : struct {
+        var structSize = Marshal.SizeOf<T>();
+        var structBytes = KernelMethods.ReadMemory(gameHandle, address, (uint)structSize);
+
+        T resultStruct;
+        GCHandle gch = GCHandle.Alloc(structBytes, GCHandleType.Pinned);
+        try {
+            resultStruct = Marshal.PtrToStructure<T>(gch.AddrOfPinnedObject());
+        }
+        finally {
+            gch.Free();
+        }
+
+        return resultStruct;
+    }
+
+    public static string ReadString(nint gameHandle, IntPtr address) {
+        var value = ReadStruct<StandardString>(gameHandle, address);
+        return value.ToString(gameHandle);
     }
 
     public static void WriteValue<T>(nint handle, nint location, T newValue) {
