@@ -73,7 +73,7 @@ internal class Program {
             var stringAddress = steamEngineVisualizationStruct.pressureReadout + 0x260;
             var psiText = MemoryUtil.ReadString(gameHandle, stringAddress);
 
-            float rv = 0;
+            float rv;
             if (psiText.EndsWith(" PSI") && float.TryParse(string.Join("", psiText.SkipLast(" PSI".Length)), CultureInfo.InvariantCulture, out var res)) {
                 rv = res;
             } else if (psiText.Contains("IN HG") && float.TryParse(psiText.Split("IN HG")[0], out var res2)) {
@@ -91,7 +91,7 @@ internal class Program {
             var stringAddress = steamEngineVisualizationStruct.waterLevelReadout + 0x260;
             string ccText = MemoryUtil.ReadString(gameHandle, stringAddress);
 
-            float rv = 0;
+            float rv;
             if (ccText.EndsWith(" CC") && float.TryParse(string.Join("", ccText.SkipLast(" CC".Length)), CultureInfo.InvariantCulture, out var res)) {
                 rv = res;
             } else {

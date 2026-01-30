@@ -18,21 +18,21 @@ public readonly struct StandardString {
     [StructLayout(LayoutKind.Explicit, Size = bufferSize)]
     private unsafe struct StringValue {
         [FieldOffset(0)]
-        public fixed byte Buffer[bufferSize];  // Short string optimization if Capacity <= SmallStringCapacity
+        public fixed byte buffer[bufferSize];  // Short string optimization if Capacity <= SmallStringCapacity
         [FieldOffset(0)]
-        public readonly IntPtr ExternalBuffer;    // if Capacity > SmallStringCapacity
+        public readonly IntPtr externalBuffer;    // if Capacity > SmallStringCapacity
 
     }
 
 
     public unsafe readonly string ToString(nint gameHandle) {
         if (capacity <= smallStringCapacity) {
-            fixed (byte* buffer = value.Buffer) {
+            fixed (byte* buffer = value.buffer) {
                 return Encoding.UTF8.GetString(buffer, (int)size);
             }
         }
         else {
-            return Encoding.UTF8.GetString(KernelMethods.ReadMemory(gameHandle, value.ExternalBuffer, (uint)size));
+            return Encoding.UTF8.GetString(KernelMethods.ReadMemory(gameHandle, value.externalBuffer, (uint)size));
         }
     }
 }
