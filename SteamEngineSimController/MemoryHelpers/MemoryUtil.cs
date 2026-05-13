@@ -188,6 +188,15 @@ public static class MemoryUtil {
         return rv.Select(x => new MemoryPage(x)).ToArray();
     }
 
+    public static nint[] FindMemoryWithWildcardsAcrossALLPages(nint gameHandle, byte[] bytesToFind) {
+        var pages = GetMemoryPages(gameHandle);
+        return FindMemoryWithWildcardsAcrossALLPages(gameHandle, bytesToFind.Select(x=>(byte?)x).ToArray(), pages).Keys.ToArray();
+    }
+
+    public static nint[] FindMemoryWithWildcardsAcrossALLPages(nint gameHandle, byte[] bytesToFind, MemoryPage[] pages) {
+        return FindMemoryWithWildcardsAcrossALLPages(gameHandle, bytesToFind.Select(x=>(byte?)x).ToArray(), pages).Keys.ToArray();
+    }
+
     public static Dictionary<nint, byte[]> FindMemoryWithWildcardsAcrossALLPages(nint gameHandle, byte?[] bytesToFind) {
         var pages = GetMemoryPages(gameHandle);
         return FindMemoryWithWildcardsAcrossALLPages(gameHandle, bytesToFind, pages);

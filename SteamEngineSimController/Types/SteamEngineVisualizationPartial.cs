@@ -39,6 +39,9 @@ public readonly struct SteamEngineVisualizationPartial {
     public readonly IntPtr brakeStopSlider, whistleSliger, reverserSlider; // pattern to be searched
 
     public readonly IntPtr pressureReadout, waterTempReadout, waterLevelReadout;
+    public readonly IntPtr waterFlowRateReadout, steamTempReadout, engineSpeedReadout;
+    public readonly IntPtr healthReadout, sedimentReadout, waterContaminationReadout;
+    public readonly IntPtr waterFilterReadout, pistonSealReadout;
 }
 
 // RadialSlider size: 1296=0x510 bytes (confirmed via cheatengine mem layout, reverser and prv and throttle appear stacked after eachother, like in an array of structs)
